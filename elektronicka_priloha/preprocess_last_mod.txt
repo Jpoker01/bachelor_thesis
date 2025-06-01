@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+# coding: utf-8
+import re
+import inflect
+import nltk
+from nltk.corpus import stopwords, wordnet
+from nltk.stem import WordNetLemmatizer
+from tqdm import tqdm
+tqdm.pandas(desc="progress-bar")
+from gensim.models.doc2vec import TaggedDocument
+import os
+import nltk
+from bs4 import BeautifulSoup
+
+nltk.download('stopwords')
+stop = set(stopwords.words('english'))
+# f = open(DIRECTORY_PATH + 'stop-word-list.txt')
+# stopwordsFile = f.read().lower().split()
+# stop.update(stopwordsFile)
+
+wordnet_lemmatizer = WordNetLemmatizer()
+inflect = inflect.engine()
+
+# number format regular expression
+num_format = re.compile("^[\-]?[1-9][0-9]*\.|,?[0-9]+")
+
+ver_format = re.compile("^[1-2]\d{3}$")
+
+# punctuations
+punctuations = re.compile('-|\>|\$|@|#|!|%|\^|&|\?|\<|--|==|__')
+
+# SP format
+sp_format = re.compile('.*SP( )*[0-9]+')
+
+# SAP Note
+note_format = re.compile('.*(note|Note)+(\s)*(Number|number|#)*(\s|-)*[0-9]+')
+
+# SAP Incident reference
+incident_format = re.compile('.*(Incident|incident|OSS|oss)(\s)*(number|Number|#)*(\s|-)*[0-9]+')
+
+# Remove URLs
+url_format = re.compile('http|^https?:\/\/.*[\r\n]*')
+
+def match_num_format():
+    if (re.match(num_format, message)):
+        if (re.match(ver_format, message)):
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
+def removespecialcharacteratend(msgtxt):
+    # print(msgtxt)
+    start = len(msgtxt) - 1
+    if re.search('[:/.,-]', msgtxt[start:]) == None:
+        return msgtxt
+    else:
+        return msgtxt[0:start]
+
+
+# function to convert nltk tag to wordnet tag
+def nltk_tag_to_wordnet_tag(nltk_tag):
+    # print(nltk_tag)
+    if nltk_tag.startswith('J'):
+        return wordnet.ADJ
+    elif nltk_tag.startswith('V'):
+        return wordnet.VERB
+    elif nltk_tag.startswith('N'):
+        return wordnet.NOUN
+    elif nltk_tag.startswith('R'):
+        return wordnet.ADV
+    else:
+        return None
+
+
+def pos_tag_for_lemma(tag):
+    if tag.startswith('V'):
+        return 'v'
+    if tag.startswith('N'):
+        return 'n'
+    if tag.startswith('J'):
+        return 'a'
+    if tag.startswith('R'):
+        return 'r'
+    else:
+        return None
+
+
+def make_preprocess_changes(message):
+    # Hyperlink Pattern
+    urlreg = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]" \
+             r"+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+    message = re.sub(urlreg, 'HyperLINKstring', message)
+
+    # # Object Pattern class(only underscore)
+    # message = re.sub('''[\w|'+|"+]+[_][\w|'+|"+]+''', 'ObJecTclass', message)
+
+    # # obeject string  Pattern(only hyphen ,removed underscores)
+    # message = re.sub('''[\w|'+|"+]+[-][\w|'+|"+]+''', 'ObJecTstring', message)
+
+    # # Digit Pattern
+    # message = " ".join(["DigiTstring" if mes.isdigit() else mes for mes in message.split()])
+
+    # # Alphanumeric pattern
+    # alpattern = re.compile('^(?=.*[a-zA-Z])(?=.*[0-9])[A-Za-z0-9]+$')
+    # message = " ".join(["AlPhaNum" if(re.search(alpattern, mes)) else mes for mes in message.split() ])
+
+    return message
+
+
+def getCleanTokens_custom(message, dostopwords=True, wordlength=2):
+    # print(message)
+        
+    message = re.sub('[+\"\'-+]', ' ', message)
+    message = re.sub('[.$]', '', message)
+    message = re.sub('[*]', ' ', message)
+
+
+
+    # # Handeling Unicodes
+    # message = re.sub(r'\\u\d{0,}\w', ' ', message)
+
+    # # Handeling Hyphen
+    # message = re.sub(r'-{2,}', ' ', message)
+
+    # # Handeling Equal To
+    # message = re.sub(r'={2,}', ' ', message)
+
+    #Making Changes in Preprocessing
+    message=make_preprocess_changes(message)
+
+    #print("Filtered Message - {}".format(message))
+    #     #  remove underscores
+    #     message=re.sub('^_{2,}_$','',message)
+
+    # take care of comma separated words(phrases)
+    m_phrases = message.split(',')
+    m_tokens = []
+    for m in m_phrases:
+        m_tokens = m_tokens + m.split(' ')
+    m_tokens = [w for w in m_tokens if not re.match(sp_format, w) and not re.match(num_format, w) and w != '']
+    m_tokens = nltk.pos_tag(m_tokens)
+    m_tokens = [wordnet_lemmatizer.lemmatize(w[0].lower(), pos_tag_for_lemma(w[1])).lower() for w in m_tokens if
+                nltk_tag_to_wordnet_tag(w[1]) != None]
+
+    singular_tokens = []
+    for n in m_tokens:
+        n = removespecialcharacteratend(n)
+        if len(n) > 0 and n.isalnum() == True:
+            inflectedWord = inflect.plural(n)
+            if len(inflectedWord) < len(n):
+                n = inflectedWord
+
+        if len(n) <= wordlength or n in stop:
+            continue
+
+        singular_tokens.append(n)
+
+    msg_tokens = singular_tokens
+
+    return msg_tokens
+
+
+def add_label(noise_sen):
+    output = []
+    for i, s in enumerate(noise_sen):
+        output.append(TaggedDocument(s, ["sent_" + str(i)]))
+    return output
+
+def process_data(df, columnname):
+    sent_list = df[columnname].apply(lambda x: getCleanTokens_custom(str(x).encode('ascii', 'ignore').decode())).tolist()
+
+    return sent_list
+
+def regex_knowlege_check(sent):
+    pattern= re.compile('''[\w|'+|"+]+[_-][\w|'+|"+]+''')
+    pat_ser = pattern.search(sent)
+    # Try to include ~
+    if pat_ser != None:
+        return True
+    return False
