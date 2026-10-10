@@ -55,7 +55,3 @@ Notebooks follow the pattern `inc_classify_<representation>_<variant>`, where th
 | `oversampled` | Data augmentation of the minority (upgrade) class using back translation |
 | `sample_comb` | Combination of data augmentation and undersampling |
 
-### Appendices
-
-- [`priloha_A/Incident.pdf`](priloha_A/Incident.pdf) - Anonymized example of an SAP customer incident (appendix A)
-- [`priloha_B/vysledky_experimentu.pdf`](priloha_B/vysledky_experimentu.pdf) - Results of all experiments for each representation, balancing method and classifier
