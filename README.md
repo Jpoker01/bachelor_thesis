@@ -38,7 +38,6 @@ Lists all the experiments done for this bachelor thesis (appendix C of the thesi
 | Path | Description |
 | --- | --- |
 | `inc_preprocessing.html` | Data preprocessing used for the TF-IDF, Word2Vec and Doc2Vec experiments (HTML parsing, sentence segmentation, tokenization, lemmatization, stop word removal, language and noise filtering) |
-| `preprocess_last_mod.txt` | Supplementary preprocessing code taken from a concurrently developed SAP classification system (not the author's own work) |
 | `data_augment.html` | Data augmentation of upgrade sentences using back translation (English → German → English) via the `transformers` library |
 | `tf-idf/` | Notebooks utilizing the TF-IDF representation |
 | `Word2Vec_avg/` | Notebooks utilizing Word2Vec (Skip-gram) sentence vectors created by averaging word vectors |
